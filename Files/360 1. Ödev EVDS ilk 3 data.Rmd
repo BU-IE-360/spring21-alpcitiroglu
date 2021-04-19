@@ -1,0 +1,113 @@
+---
+title: "Homework 1"
+author: "Alp Çıtıroğlu"
+date: "17/04/2021"
+output: html_document
+---
+In this homework I am going to analyze 3 measurements which are USD Value, Credit Interest and sale of housing. Also I am going to analyze 2 trends which are  Dolar and Kredi. I will explain the changes under each measurements and trends
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("data.table")
+library("ggplot2")
+library("openxlsx")
+library(readxl)
+```
+
+1)USD VALUE
+
+```{r USD_Value}
+USD_Value <- read_excel("DATA HW1 IE360/USD_Value.xlsx",n_max=174)
+USD_Value<-data.table(USD_Value)
+names<-c("Date","Rate")
+setnames(USD_Value,names(USD_Value),names)
+USD_Value$Date<-as.Date(USD_Value$Date,format="%d-%m-%Y")
+USD_Value$Rate<-as.numeric(USD_Value$Rate)
+str(USD_Value)
+plot(USD_Value$Date, USD_Value$Rate, xlab="Date", ylab="USD/Tl", main="USD 3 Years Performance",type = "o", col="blue", pch=20, cex=1.0,lwd=3.0)
+```
+
+
+From USD_Value graph it can be seen that there is an increasing trend id dolar/tl ratio. There are some short-term reduction in USD values almost every years but after that reduction there are sharp increments. These increments can be considered normal due to Turkey's economy because between 2018 and 2021 USD value is slightly increases. There are only two increments which can be considered abnormal. These two abnormal increments are in the middle of 2018 and 2020. In 2018 its because of the politic attitudes and in 2020 its because of the corona virus.
+
+
+
+2)Dolar Search
+
+```{r Dolar_Search}
+Dolar_Search <- read_excel("DATA HW1 IE360/Dolar_Search.xlsx",n_max=172)
+Dolar_Search<-data.table(Dolar_Search)
+str(Dolar_Search)
+names<-c("Date","Rate")
+setnames(Dolar_Search,names(Dolar_Search),names)
+Dolar_Search$Date<-as.Date(Dolar_Search$Date,format="%d-%m-%Y")
+Dolar_Search$Rate<-as.numeric(Dolar_Search$Rate)
+str(Dolar_Search)
+plot(Dolar_Search$Date, Dolar_Search$Rate, xlab="Date", ylab="Dolar search", main="Dolar Trend",type = "o", col="Orange", pch=20, cex=1.0, lwd=3.0)
+
+```
+
+
+The dollar trend is less volatile than other graphs but has very distinct peak points. The exchange rate crisis in 2018, was the reason of the abnormality shown in the graph. The appreciation in USD resulted in the devaluation of the Turkish liras. There are also increase in 2020 and 2021 due to coronavirus and the various decisions, such as the credit interest rate changes. So from this graph, it is easily observed that the dollar search from Google is highly correlated with the USD exchange rate.
+
+
+3)Credit Interest
+
+```{r Kredi_Faiz}
+Kredi_Faiz <- read_excel("DATA HW1 IE360/Kredi_Faiz.xlsx",n_max=171)
+Kredi_Faiz<-data.table(Kredi_Faiz)
+str(Kredi_Faiz)
+names<-c("Date","Rate")
+setnames(Kredi_Faiz,names(Kredi_Faiz),names)
+Kredi_Faiz$Date<-as.Date(Kredi_Faiz$Date,format="%d-%m-%Y")
+Kredi_Faiz$Rate<-as.numeric(Kredi_Faiz$Rate)
+str(Kredi_Faiz)
+plot(Kredi_Faiz$Date, Kredi_Faiz$Rate, xlab="Date", ylab="Credit Interest Rate", main="Credit Interest Rate level", type="o",col="Purple", pch=20, cex=1.0, lwd=3.0 )
+```
+
+
+The credit interest rate has a volatile trend. An increasing trend is observed from 2018 to the first quarter of 2019. After 2019 there is a sharp decline till the second quarter of 2020. The increasing trend between 2018-2019 and 2020-2021 has similar aspects, especially as they are both sharp. An abnormal credit interest rate is observed in the last months of 2018 and a striking decline is observed in the second quarter of 2020. The first abnormality is due to the exchange rate crisis happened in 2018, correlated with an increase in interest rates. The decline of 2020 is due to the coronavirus crisis. The aim was to increase liquidity thus control the exchange rates.
+
+
+
+
+4)Credit Search
+
+```{r Credit_Search}
+Credit_Search <- read_excel("DATA HW1 IE360/Credit_Search.xlsx",n_max=172)
+Credit_Search<-data.table(Credit_Search)
+str(Credit_Search)
+names<-c("Date","Rate")
+setnames(Credit_Search,names(Credit_Search),names)
+Credit_Search$Date<-as.Date(Credit_Search$Date,format="%d-%m-%Y")
+Credit_Search$Rate<-as.numeric(Credit_Search$Rate)
+str(Credit_Search)
+plot(Credit_Search$Date, Credit_Search$Rate, type = "o",xlab="Date", ylab="Credit Search", main="Credit Trend", col="Orange", pch=20, cex=1.0, lwd=3.0)
+```
+
+
+
+The credit search trends are very volatile but mostly correlated with the increase and decreases on the credit interest rate levels. The abnormality on the credit interest rates are also visible in this graph. There is a peak in the first quarter of 2018, and decline in the first months of 2020. Increased rates will lead to a lower demand and vice versa.  There is a similar pattern in the trend as each year, the research levels drop in the later months. The only correlation between USD exchange rate graph and the credit search graph is that when USD’s value increases too much, the demand for credit decreases.
+
+
+
+5)House Sales
+
+```{r Konut_Satış}
+Konut_Satış <- read_excel("DATA HW1 IE360/Konut_Satış.xlsx",n_max=39)
+Konut_Satış<-data.table(Konut_Satış)
+str(Konut_Satış)
+names<-c("Date","Rate")
+setnames(Konut_Satış,names(Konut_Satış),names)
+Konut_Satış$Date<-as.Date(Konut_Satış$Date,format="%M-%Y")
+Konut_Satış$Rate<-as.numeric(Konut_Satış$Rate)
+str(Konut_Satış)
+plot(Konut_Satış$Date, Konut_Satış$Rate, type = "o",xlab="Date", ylab="Number of House Sold", main="House Sales Performance",col="purple", pch=20, cex=0.80, lwd=5.0)
+```
+
+
+
+In the house sale levels, there is a slight increase from 2018 to 2019, a relatively sharp increase in 2020. After that the house sale levels made an interesting pattern, first a sharp decline and later in the second half of 2020, a peak in sales levels occurred. The increasing trend pattern from 2019-2020 and during 2020 is similar, but the 2020 pattern is more striking. The abnormality in 2020 can be explained by the uncertainty coming out of the coronavirus crisis, a house was seen as a reliable investment. There is also a negative correlation between the house sales and credit interest rates as higher rates result in lower demand to houses.
+```
+
+
