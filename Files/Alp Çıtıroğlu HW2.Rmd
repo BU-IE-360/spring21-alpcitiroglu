@@ -1,0 +1,295 @@
+title: "Alp Çıtıroğlu HW2"
+author: "Alp Çıtıroğlu"
+---
+```{r setup, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(data.table)
+library(ggplot2)
+library(lubridate)
+library(forecast)
+library(GGally)
+library(readxl)
+library(gridExtra)
+library(openxlsx)
+```
+###1)Introduction
+Clothing CPI shows the purchasing power of people and also an indicator that shows the economies performance. And this CPI value is express montly so we should analye this value monthly. Our aim is to forecast the future CPI values about clothing and footwear in April 2021. 
+
+
+##2) Data Manipulation
+The monthly data of CPI index of clothing and footwear is imported from EVDS.Also I import some regressors which are related to CPI Index. These regressors are Dolar exchange rate, Inflation rate, Interest rate and a survey data which is the probability of saving over next 12 months.
+
+```{r, include=FALSE}
+Clothes<-as.data.table(read_excel("~/Desktop/IE360 HW.xlsx"))
+```
+
+```{r, include=FALSE}
+Clothes[,day:="01"]
+Clothes[,date:=as.Date.character(paste(Tarih, day), format="%Y-%m %d")]
+Clothes[, Tarih:=NULL][, day:=NULL]
+setnames(Clothes, c(1, 2, 3, 4, 5), c("Clothes_CPI", "Dolar", "Survey", "Faiz", "Inflation"))
+Clothes[, Clothes_CPI := as.numeric(Clothes_CPI)][, Dolar := as.numeric(Dolar)][, Survey := as.numeric(Survey)][, Inflation := as.numeric(Inflation)][, Dolar := as.numeric(Dolar)]
+```
+I delete the first column which is date and add it to end. And I add names to other columns like Clothes_CPI, Dolar, Survey, Faiz and Inflation
+```{r, echo=FALSE}
+tail(Clothes)
+```
+
+
+
+##3)Visualize
+```{r, echo=T, warning=F, message=F}
+ggpairs(Clothes[, .(Clothes_CPI, Dolar, Survey, Faiz, Inflation)]) 
+```
+In this table we can see that the Clothes_CPI value is significantly correlated with dolar ratio, interest rate and inflation rate. However the survey results seem to be less important. But I will use all of these regressors in order to forecast CPI index for Clothes and footwear.
+
+
+
+##4)Trend
+```{r, echo=F}
+ggplot(Clothes, aes(x=date, y=Clothes_CPI)) + 
+  geom_line() +
+  theme_light() + 
+  labs(title="Consumer Price Index“CLOTHING AND FOOTWEAR”",
+       x="Date",
+       y="Clothes_CPI") +
+  scale_x_date(date_breaks = "3 months", 
+               limits = as.Date(c("2014-01-01", "2021-03-01"))) +
+  theme(axis.text.x = element_text(angle = 90))
+```
+There is not any seasonality effect for this data in the long term there is an uptrend. However in some dates the variance increased too much. Therefore we cannot assume that there is a constant variance. Therefore only with this data if we forecast the value it will be different from the real value.
+
+```{r, echo=T}
+Clothes[,trend:=1:.N]
+reg<-lm(Clothes_CPI~trend, Clothes)
+```
+
+```{r, echo=F, warning=F, message=F}
+summary(reg)
+Clothes[, predicted:=round(predict(reg, Clothes))]
+ggplot(Clothes, aes(x=date)) + 
+  geom_line(aes(y = Clothes_CPI, color = "Clothes_CPI")) + 
+  geom_line(aes(y = predicted, color = "predicted")) +
+  labs(title="Consumer Price Index“CLOTHING AND FOOTWEAR”",
+       x="Date",
+       y="Clothes_CPI") +
+  scale_x_date(date_breaks = "3 months", 
+               limits = as.Date(c("2014-01-01", "2021-03-01"))) +
+  theme(axis.text.x = element_text(angle = 90))
+```
+The p-value of F-statistic is very small so the trend fit with our data. So we dont have to add dummy variable. So we need to analyze the seasonality effect by autocorrelation function.
+
+```{r, echo=F}
+acf(Clothes[,Clothes_CPI], main="ACF of Consumer Price Index“CLOTHING AND FOOTWEAR”")
+```
+And we can understand that Seasonality dont have significant effect on Consumer Price Index“CLOTHING AND FOOTWEAR”
+
+
+
+##5)Regressors
+As I mentioned before there are some variables which are related with Clothing_CPI. These variables are Inflation rate, Interest Rate, Dolar Rate and survey data.
+Before looking to these variables we need to check residuals as a start point.
+```{r,echo=T}
+checkresiduals(reg)
+```
+Residuals graphic seems to be normally distributed with a mean of zero. However there is some correlation between values and residuals violating the constant variance theory in regression.
+
+
+
+##6)Interest Rate Effect on Clothes_CPI
+Interest rate effect the loans which are taken from the bank. And this situation effects the people spendings.
+```{r,echo=F, warning=F, message=F}
+Clothes[, residuals:=Clothes_CPI-predicted]
+ggplot(Clothes, aes(x=Faiz, y=residuals)) + 
+  geom_point() + 
+  geom_smooth() +
+  labs(title="Interest Rate Effect Clothes_CPI vs. Residuals",
+       x="Rate",
+       y="Residuals") 
+```
+Interest Rate between 15-20 residuals seem to be random and have zero mean. If interest rate increase there is an non-linear relationship and its hard to model.
+ 
+```{r, echo=T}
+reg<-lm(Clothes_CPI~trend+Faiz, Clothes)
+```
+
+```{r,echo=F, warning=F, message=F}
+summary(reg)
+Clothes[, predicted:=round(predict(reg, Clothes))]
+ggplot(Clothes, aes(x=date)) + 
+  geom_line(aes(y = Clothes_CPI, color = "actual")) + 
+  geom_line(aes(y = predicted, color = "predicted")) +
+  labs(title="Consumer Price Index“CLOTHING AND FOOTWEAR”",
+       x="Date",
+       y="Clothes_CPI") +
+  scale_x_date(date_breaks = "3 months", 
+               limits = as.Date(c("2014-01-01", "2021-03-01"))) +
+  theme(axis.text.x = element_text(angle = 90))
+```
+p-value is again too small however R-squared value increased a little bit and F-statistic decreased too much. Therefore interest rate data has an effect on Clothes_CPI.
+
+After adding interest rate we check residuals again.
+```{r,echo=T}
+checkresiduals(reg)
+```
+There is some correlation with the residual values, we can say a normal distribution applies. Zero mean rule also applies and variance is more constant.Therefore it is in a better condition than before.
+
+
+
+
+##7)Probability of Saving Survey Data
+Probability of saving data over the next 12 months is related with Clothes_CPI. Because spending effects the Clothing_CPI
+```{r,echo=F, warning=F, message=F}
+Clothes[, residuals:=Clothes_CPI-predicted]
+ggplot(Clothes, aes(x=Survey, y=residuals)) + 
+  geom_point() + 
+  geom_smooth() +
+  labs(title="Probability of Saving vs. Residuals",
+       x="Probability",
+       y="Residuals") 
+```
+Overall we see randomly distributed residual values. But there is an observable accumulation in 20.0-25.0 probability levels. The residuals are more rare when the probability of savings increase which means the probability of savings seems to be negatively correlated with CPI. So the regression test corrects our assumption: The saving rate and the CPI levels move opposite directions
+
+```{r, echo=T}
+reg<-lm(Clothes_CPI~trend+Faiz+Survey, Clothes)
+```
+
+```{r, warning=F, message=F}
+summary(reg)
+Clothes[, predicted:=predict(reg, Clothes)]
+ggplot(Clothes, aes(x=date)) + 
+  geom_line(aes(y = Clothes_CPI, color = "actual")) + 
+  geom_line(aes(y = predicted, color = "predicted")) +
+  labs(title="Consumer Price Index“CLOTHING AND FOOTWEAR”",
+       x="Date",
+       y="Clothes_CPI") +
+  scale_x_date(date_breaks = "3 months", 
+               limits = as.Date(c("2014-01-01", "2021-03-01"))) +
+  theme(axis.text.x = element_text(angle = 90))
+```
+With the help of summary data again Adjusted R-squared value increased a little bit and F-statistic decreased and p-value is too small again
+
+
+##8)Inflation Rate
+Inflation Rate is very important for products price. I mean higher inflation rate causes higher clothes prices
+```{r, echo=FALSE, warning=F, message=F}
+reg<-lm(Clothes_CPI~+trend+Faiz, Clothes)
+Clothes[, predicted:=round(predict(reg, Clothes))]
+Clothes[, residuals:=Clothes_CPI-predicted]
+ggplot(Clothes, aes(x=Inflation, y=residuals)) + 
+  geom_point() + 
+  geom_smooth() +
+  labs(title="Inflation vs. Residuals",
+       x="Inflation",
+       y="Residuals") 
+```
+Overall we see randomly distributed residual values. But there is an observable accumulation in 0-15.0 inflation levels.Because of overestimation we should use more variables in order to increase the accuracy.
+
+```{r,echo=T}
+reg<-lm(Clothes_CPI~trend+Faiz+Inflation, Clothes)
+```
+
+```{r,echo=F, warning=F, message=F}
+summary(reg)
+Clothes[, predicted:=round(predict(reg, Clothes))]
+ggplot(Clothes, aes(x=date)) + 
+  geom_line(aes(y = Clothes_CPI, color = "actual")) + 
+  geom_line(aes(y = predicted, color = "predicted")) +
+  labs(title="Consumer Price Index“CLOTHING AND FOOTWEAR”",
+       x="Date",
+       y="Clothes_CPI") +
+  scale_x_date(date_breaks = "3 months", 
+               limits = as.Date(c("2014-01-01", "2021-03-01"))) +
+  theme(axis.text.x = element_text(angle = 90))
+```
+With the help of this model F-statistic value improved however R-squared value decreased a little bit(we don't want this condition) and p-value is again too small.
+
+At this point, we can check the assumptions on residuals.
+```{r,echo=T}
+checkresiduals(reg)
+```
+Residuals are looking better than before and satisfy zero mean rule. Residuals are almost in the confidence level.
+
+
+
+##9)Dolar Rate
+The dolar rate is related with Clothes_CPI because its effect the clothes prices.
+
+```{r, echo=F, warning=F, message=F}
+Clothes[, residuals:=Clothes_CPI-predicted]
+ggplot(Clothes, aes(x=Dolar, y=residuals)) + 
+  geom_point() + 
+  geom_smooth() +
+  labs(title="Dolar Rate vs. Residuals",
+       x="Dolar Rate",
+       y="Residuals") 
+```
+Overall we see randomly distributed residual values. But there is an observable accumulation in 2-4 ratio levels. The residuals are more rare when the dolar ratio increases which means dolar ratio seems to be negatively correlated with CPI which does not satisfy our regression analysis.
+
+
+```{r,echo=T}
+reg<-lm(Clothes_CPI~trend+Faiz+Inflation+Dolar, Clothes)
+```
+
+```{r, echo=FALSE, warning=F, message=F}
+summary(reg)
+Clothes[, predicted:=predict(reg, Clothes)]
+ggplot(Clothes, aes(x=date)) + 
+  geom_line(aes(y = Clothes_CPI, color = "actual")) + 
+  geom_line(aes(y = predicted, color = "predicted")) +
+  labs(title="Consumer Price Index“CLOTHING AND FOOTWEAR”",
+       x="Date",
+       y="Clothes_CPI") +
+  scale_x_date(date_breaks = "3 months", 
+               limits = as.Date(c("2014-01-01", "2021-03-01"))) +
+  theme(axis.text.x = element_text(angle = 90))
+```
+F-statistic decreased again and adjusted R-squared value is more than the 8th model. After all these models:
+P-value decreased from 4.99e-12 to 2.2e-16
+F-statistics decreased from 569.4 to 150.1
+Adjusted R-squared increased from 0.8686 to 874
+These datas shows that with the help of our regressors we can explain the residuals better.
+
+```{r, echo=T, warning=F, message=F}
+checkresiduals(reg)
+```
+Residuals are less correlated in this graphic and there is more of normal distribution in this one. Zero mean is satisfied. Residuals are almost in the confidence level.
+
+
+
+```{r, echo = F, warning = F, message = F}
+p1 <- ggplot(Clothes, aes(x=Faiz, y=residuals)) + geom_point() 
+p2 <- ggplot(Clothes, aes(x=Inflation, y=residuals)) + geom_point()
+p3 <- ggplot(Clothes, aes(x=Dolar, y=residuals)) + geom_point()
+p4 <- ggplot(Clothes, aes(x=predicted, y=residuals)) + geom_point() + labs(x="fitted")
+grid.arrange(p1, p2, p3, p4, nrow=2, top="Residuals Comparison with Scatter Plots")
+```
+
+
+
+##10)Forecast
+```{r, echo = T}
+tail(Clothes)
+interest_rate <- Clothes[Clothes$Faiz, mean(Faiz, na.rm = TRUE)]
+Dolar_rate <- Clothes[Clothes$Dolar, mean(Dolar, na.rm = TRUE)]
+Inflation_Rate <- Clothes[Clothes$Inflation, mean(Inflation, na.rm = TRUE)]
+```
+
+```{r, echo = T}
+forecast <- predict(reg, data.table(month="April",
+                        trend = Clothes[,.N] + 1,
+                        Dolar = Dolar_rate,
+                        Faiz = interest_rate, 
+                        Inflation = Inflation_Rate))
+round(forecast)
+```
+The survey results were not used in this forecast as a result we only used the mean values of 3 indicators:Interest,Inflation and Dolar rates.
+
+
+
+##11)Conclusion
+In this homework I try to model the CPI index of Clothing and footwear by using some regressors. before using regressors I looked to trend and seasonality but there is no seasonality. After that I added some regressors and checked residuals one by one. This model is not completely accurate but give some infos about the future. My aim is to predict the CPI index of clothes and footwear in April 2021. Final values are ;
+adjusted R-squared value is around %87.
+P-value is 2.2e-16
+F-statistics is 150.1
+An my prediction for April 2021 is:243 for CPI index.
