@@ -1,0 +1,383 @@
+---
+author: "Alp Çıtıroğlu"
+---
+```{r setup, include = FALSE, echo = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(data.table)
+library(ggplot2)
+library(forecast)
+library(zoo)
+library(urca)
+```
+
+# Introduction
+
+In this homework I am going to try to analyze electric consumption data and after I create my model, I will forecast the consumption of electricity in next 2 weeks.
+
+# Importing and Manipulation
+
+```{r, include = F, echo = F,warning = F, message = F}
+consumption = fread("~/Desktop/RealTimeConsumption.csv")
+```
+
+```{r,warning = F, message = F}
+consumption[,Date:=as.Date.character(Date, format = "%d.%m.%Y")]
+consumption[,Time:=paste(Date,Hour)]
+consumption[,Time:=as.POSIXct(Time, format = "%Y-%m-%d %H:%M")]
+consumption[,c("Date","Hour"):=NULL]
+setnames(consumption, 1, "Consumption")
+consumption[,Consumption:=list(gsub(pattern = ",", replacement = "", x = Consumption))]
+consumption[,Consumption:=as.numeric(Consumption)]
+head(consumption,3)
+```
+
+# Analysis
+
+I try to decompose the consumption series by starting hourly level and after that daily and monthly respectively. And also I consider the seasonality effect because electricity consumption can be changed easily by being in morning or night, being in weekday or weekend and being in winter or summer.
+
+## Hourly Decomposing 
+
+Smoothing the data by using moving average. 
+
+```{r,warning = F, message = F}
+trend = filter(consumption[,Consumption], sides = 2, filter = rep(1/24, 24))
+hourly = data.table(consumption, data.frame(trend))
+```
+
+Visually
+
+```{r, warning = F, message = F, echo=F}
+ggplot(hourly, aes(x = Time)) +
+  geom_line(aes(y=Consumption),color = "yellow") +
+  geom_line(aes(y=trend),color = "black") +
+  labs(title="Hourly Consumption&Trend-Cycle",
+       x="Time",
+       y="Consumption") 
+```
+
+By doing detrend I try to to find seasonality effect.
+
+```{r, warning = F, message = F}
+hourly[,detrended:=Consumption-trend]
+hourly[,seasonal:=mean(detrended, na.rm = TRUE), by = list(hour(Time))]
+```
+
+```{r, warning = F, message = F, echo=F}
+ggplot(hourly[1:72], aes(x=Time, y=seasonal)) + 
+  geom_line(size=2, color="orange") +  
+  labs(title="Daily Seasonality",
+       x="Time",
+       y="Mean")  
+```
+
+This plot shows the effects of each hour of the day and it can easily be seen that in early hours like 06:00 average consumption is too low and it is increasing until noon and being stable until night.
+
+For Stationarity and Seasonality
+
+```{r, warning = F, message = F, echo=F}
+hourly[, summing_result:= detrended-seasonal]
+summary(ur.kpss(hourly[,summing_result]))
+```
+
+```{r, warning = F, message = F, echo=F}
+ggAcf(hourly[,summing_result],lag.max=168) +
+  labs(title="Summing_Result ACF") 
+```
+
+Test statitic is very low so there is stationarity however from the ACF plot it can be seen that there is a seasonality effect.
+
+## Daily Decomposing
+
+In this part I pass from the hourly series to the daily series and smooth it.
+
+```{r, warning = F, message = F}
+daily = consumption[, list(Consumption=mean(Consumption, na.rm=TRUE)), by=list(as.Date(Time+10000))]
+trend = filter(daily[,Consumption], sides = 2, filter = rep(1/7, 7))
+daily = data.table(daily, trend)
+setnames(daily, 1, "Time")
+```
+
+```{r, warning = F, message = F, echo=F}
+ggplot(daily, aes(x = Time)) +
+  geom_line(aes(y=Consumption), color="yellow") +
+  geom_line(aes(y=trend), color="black") +
+  labs(title="Daily Consumption & Trend-Cycle",
+       x="Time",
+       y="Consumption") 
+```
+
+By doing detrend I try to to find seasonality effect.
+
+```{r, warning = F, message = F}
+daily[,detrended:=Consumption-trend]
+daily[,seasonal:=mean(detrended, na.rm = TRUE), by=list(wday(Time))]
+```
+
+```{r, warning = F, message = F, echo=F}
+ggplot(daily[1:28], aes(x=Time, y=seasonal)) + 
+  geom_line(size=2, color="orange") +
+  labs(title="Weekly Seasonality",
+       x="Time",
+       y="Mean")   
+```
+
+This plot shows the effects of each day of the week and it can easily be seen that in weekdays consumption is stable and at weekend mostly in sunday consumption is lower.
+
+For stationarity and Seasonality,
+
+```{r, warning = F, message = F, echo=F}
+daily[, summing_result:= detrended-seasonal]
+summary(ur.kpss(daily[,summing_result]))
+```
+
+```{r, warning = F, message = F, echo=F}
+ggAcf(daily[,summing_result], lag.max=31)+
+  labs(title="Summing_Result ACF") 
+```
+In second KPPS test there is stationarity and with the help of ACF plot it can be seen that seasonality loses its effect.
+
+## Monthly Decomposing
+
+In monthly decomposing I use daily mean consumption ın order to reach the effect of mean monthly. In order to achieve this I manipulate the data.
+
+```{r, warning = F, message = F}
+monthly = daily[, list(Consumption=mean(Consumption, na.rm=TRUE)), by=list(month(Time), year(Time))]
+months<-c("1","2","3","4","5","6","7","8","9","10","11","12")  
+monthly[, month := months[month]]
+monthly[, dummy_day := "1"]
+monthly[, Time := as.Date(paste(year, month, dummy_day), format = "%Y %m %d")]
+monthly[, c("month", "year", "dummy_day"):=NULL]
+trend = filter(monthly[, Consumption], sides = 2, filter = rep(1/12,12))
+monthly = data.table(monthly, trend)
+```
+
+```{r, warning = F, message = F, echo=F}
+ggplot(monthly, aes(x = Time)) +
+  geom_line(aes(y=Consumption),size=2, color="orange") +
+  geom_line(aes(y=trend),size=2, color="black") +
+  labs(title="Monthly Consumption & Trend-Cycle",
+       x="Time",
+       y="Consumption") 
+```
+
+From the plot we can see the general trend due to increment in level of smoothness
+
+```{r, warning = F, message = F}
+monthly[,detrended:=Consumption-trend]
+monthly[,seasonal:=mean(detrended, na.rm = TRUE), by=list(month(Time))]
+```
+
+```{r, warning = F, message = F, echo=F}
+ggplot(monthly[1:36], aes(x=Time, y=seasonal)) + geom_line(size=2, color="orange") +
+  labs(title="Yearly Seasonality",
+       x="Time",
+       y="Mean") 
+```
+
+From the plot, the seasonality effect can be seen easily. In the middle of summer and at the beginning of winter consumption is increasing.
+
+For Stationarity and Seasonality
+
+```{r, warning = F, message = F, echo=F}
+monthly[, summing_result:= detrended-seasonal]
+summary(ur.kpss(monthly[,summing_result]))
+```
+
+```{r, warning = F, message = F, echo=F}
+ggAcf(monthly[,summing_result], lag.max=12, size=1.5) +
+  labs(title="summing_result ACF") 
+```
+```{r, warning = F, message = F, echo=F}
+ggPacf(monthly[,summing_result], lag.max=12, size=1.5) +
+  labs(title="Summing_Result PACF") 
+```
+
+Test statitic is very low and there is stationarity. After 3 decomposition there isn't any seasonality effect.
+
+# Modeling
+
+I choose last 14 days observations for test set and others for training set. 
+
+```{r, warning = F, message = F}
+test = consumption[(.N-335):.N]
+consumption = consumption[-((.N-335):.N)]
+```
+
+Most important seasonalities are daily and weekly therefore I choose frequency 168 in order to decompose the series.
+
+```{r, warning = F, message = F}
+trend = filter(consumption[,Consumption], sides = 2, filter = rep(1/168, 168))
+consumption = data.table(consumption, trend)
+```
+
+```{r, warning = F, message = F, echo=F}
+ggplot(consumption, aes(x = Time)) +
+  geom_line(aes(y=Consumption), color="yellow") +
+  geom_line(aes(y=trend), size=1, color="black") +
+  labs(title="Trend-Cycle (Frequency 168)",
+       x="Time",
+       y="Consumption") 
+```
+
+I smooth the series and can check the trend-cycle visually.
+
+```{r, warning = F, message = F, echo=F}
+head(consumption, 3)
+```
+
+Trend variables are NA however in order to forecast the data I need trend values. I use auto.arima function in order to determine trend values
+
+```{r message=FALSE, warning=FALSE}
+trend = consumption[!is.na(trend),trend]
+trend = ts(trend, freq = 1)
+m = auto.arima(trend, seasonal = F, stepwise = F, approx = F)
+trend_forecast = forecast(m, h = 420)
+trend_train = trend_forecast$mean[1:84]
+trend_test = trend_forecast$mean[85:420]
+consumption[(.N-83):.N, trend:=trend_train]
+test[,trend:=trend_test]
+```
+
+This plot shows the seasonality effects of each season frequency(168).
+
+```{r, warning = F, message = F}
+consumption[, detrended:=Consumption-trend]
+consumption[, seasonal:=mean(detrended, na.rm = TRUE), by=list(wday(Time),hour(Time))]
+```
+
+```{r, warning = F, message = F, echo=F}
+ggplot(consumption[1:168], aes(x=Time, y=seasonal)) + geom_line(size=2, color="orange") +
+  labs(title="Weekly&Daily Seasonality",
+       x="Time",
+       y="Mean") 
+```
+Summing_Result
+
+```{r, warning = F, message = F}
+consumption[, summing_result:=detrended-seasonal]
+```
+
+```{r, warning = F, message = F, echo=F}
+ggplot(consumption, aes(x=Time, y=summing_result)) + geom_line(color="orange", size=0.1) +
+  labs(title="Summing_Result",
+       x="Time",
+       y="Summing_Result") 
+```
+
+Generally summing_result looks good.
+
+For Stationarity
+
+```{r, warning = F, message = F, echo=F}
+summary(ur.kpss(consumption[,summing_result]))
+```
+
+There is stationary because test statistic is small
+
+Independency
+
+```{r, warning = F, message = F, echo=F}
+ggAcf(consumption[,summing_result], lag.max=168) +
+  labs(title="Summing_Result ACF") 
+```
+```{r, warning = F, message = F, echo=F}
+ggPacf(consumption[,summing_result], lag.max=168) +
+  labs(title="Summing_Result PACF") 
+```
+
+By the help of these plots it can be seen that ACF and PACF Model is not fully accurate
+
+## AR Models
+
+I try to fit an AR model for the Summing_Result.
+
+```{r, warning = F, message = F}
+AR1 = arima(consumption[,summing_result], order = c(1,0,0))
+AR2 = arima(consumption[,summing_result], order = c(2,0,0))
+AR3 = arima(consumption[,summing_result], order = c(3,0,0))
+c(AR1=AIC(AR1), AR2=AIC(AR2), AR3=AIC(AR3))
+```
+
+AR3 is the smallest one so its the best by AIC.
+
+## MA Models
+
+I try to fit an MA model.
+
+```{r, warning = F, message = F}
+MA1 = arima(consumption[,summing_result], order = c(0,0,1))
+MA2 = arima(consumption[,summing_result], order = c(0,0,2))
+MA3 = arima(consumption[,summing_result], order = c(0,0,3))
+c(MA1=AIC(MA1), MA2=AIC(MA2), MA3=AIC(MA3))
+```
+
+Ma3 gives the best  in 3 values so I choose 3rd value. 
+
+## ARMA Models
+
+ After calculating Ar and MA values we need to use ARMA and I calculate the 4 possible combination order to reach the best value. AR(3) and MA(3) as ARMA(3,3), AR(2) and MA(3) as ARMA(2,3), AR(2) and MA(2) as ARMA(2,2), AR(3) and MA(2) as ARMA(3,2) respectively
+
+```{r, warning = F, message = F}
+model1 = arima(consumption[,summing_result], order = c(2,0,3))
+model2 = arima(consumption[,summing_result], order = c(3,0,3))
+model3 = arima(consumption[,summing_result], order = c(2,0,2))
+model4 = arima(consumption[,summing_result], order = c(3,0,2))
+c(model1=AIC(model1), model2=AIC(model2), model3=AIC(model3), model4=AIC(model4))
+```
+
+ARMA(3,2) is the best combination and gives the best  by AIC which means model4.
+
+# Forecast and Evaluation
+
+```{r, warning = F, message = F}
+consumption[,res:=residuals(model4)]
+consumption[,fitted:=summing_result-res]
+consumption[,fitted:=as.numeric(fitted)+as.numeric(trend)+as.numeric(seasonal)]
+```
+
+```{r, warning = F, message = F}
+test[,summing_result:=NA]
+while( sum(is.na(test[,summing_result]))>0 ){
+  forecasted = predict(model4)
+  test[,summing_result:=forecasted$pred]
+}
+test[,seasonal:=consumption[1:336,seasonal]]
+test[,forecast:=as.numeric(summing_result)+as.numeric(seasonal)+as.numeric(trend)]
+```
+
+By Visual it can be seen that my model mostly captures the actual data however in some days there are big errors
+
+```{r, warning = F, message = F, echo=F}
+ggplot(test, aes(x=Time)) +
+  geom_line(aes(y=Consumption), color="yellow", size=1.5) +
+  geom_line(aes(y=forecast),color="black", size=1.5) +
+  labs(title="Actual&Forecasted",
+       x="Time",
+       y="Consumption") 
+```
+
+```{r, warning = F, message = F}
+accu=function(actual,forecast){
+  n=length(actual)
+  error=actual-forecast
+  mean=mean(actual)
+  bias=sum(error)/sum(actual)
+  MAPE=sum(abs(error/actual))/n
+  MAD=sum(abs(error))/n
+  WMAPE=MAD/mean
+  l=data.frame(WMAPE)
+  return(l) 
+}
+test[,accu(Consumption, forecast)]
+test[,error:=Consumption-forecast]
+test[,ape:=abs(error/Consumption)]
+test[,bias:=error/Consumption]
+ac = test[,.(daily_mape=sum(ape)/24, daily_bias=sum(bias)/24), by=.(Date=as.Date(Time))]
+ac
+```
+
+In order to calculate the success of my model I use daily mean absolute percentage error, daily bias and overall mean absolute percentage error, bias and weighted mean absolute percentage error.
+
+# Conclusion
+
+In conclusion, I try to decompose the series by hourly daily and monthly. Then I took frequency 168 in order to fit a model on Summing_Result. Model4 gives the best values(ARMA(3,2)). And  I think my model perform well in overall.
