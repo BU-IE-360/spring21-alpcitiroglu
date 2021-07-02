@@ -17,7 +17,7 @@ In this homework I am going to try to analyze electric consumption data and afte
 # Importing and Manipulation
 
 ```{r, include = F, echo = F,warning = F, message = F}
-consumption = fread("~/Desktop/RealTimeConsumption.csv")
+consumption = fread("~/Documents/GitHub/spring21-alpcitiroglu/Files/RealTimeConsumption.csv")
 ```
 
 ```{r,warning = F, message = F}
@@ -25,6 +25,7 @@ consumption[,Date:=as.Date.character(Date, format = "%d.%m.%Y")]
 consumption[,Time:=paste(Date,Hour)]
 consumption[,Time:=as.POSIXct(Time, format = "%Y-%m-%d %H:%M")]
 consumption[,c("Date","Hour"):=NULL]
+
 setnames(consumption, 1, "Consumption")
 consumption[,Consumption:=list(gsub(pattern = ",", replacement = "", x = Consumption))]
 consumption[,Consumption:=as.numeric(Consumption)]
@@ -243,6 +244,8 @@ This plot shows the seasonality effects of each season frequency(168).
 ```{r, warning = F, message = F}
 consumption[, detrended:=Consumption-trend]
 consumption[, seasonal:=mean(detrended, na.rm = TRUE), by=list(wday(Time),hour(Time))]
+
+head(consumption)
 ```
 
 ```{r, warning = F, message = F, echo=F}
@@ -255,6 +258,8 @@ Summing_Result
 
 ```{r, warning = F, message = F}
 consumption[, summing_result:=detrended-seasonal]
+
+head(consumption)
 ```
 
 ```{r, warning = F, message = F, echo=F}
